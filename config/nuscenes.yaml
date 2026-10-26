@@ -1,0 +1,139 @@
+# =====================================================================
+# ViLGOD configuration — nuScenes
+# =====================================================================
+# NOTE on adaptation vs. the paper (which uses Waymo, 64-beam):
+#   nuScenes uses a 32-beam HDL-32E at 20Hz -> much sparser scans.
+#   We therefore aggregate slightly more frames for clustering context
+#   keep the paper's HDBSCAN parameters but expose them here so they
+#   can be tuned (min_cluster_size may need lowering to ~10 for far
+#   objects on 32-beam data).
+
+dataset:
+  name: nuscenes
+  root: data/nuscenes/v1.0-mini         # path to nuScenes dataset
+  version: v1.0-mini                   # v1.0-trainval for full runs
+  split: train                         # generate pseudo-labels on train split
+  # nuScenes LIDAR_TOP runs at 20 Hz; keyframes ("samples") at 2 Hz.
+  # We use ALL sweeps for motion scoring/clustering, but only export
+  # pseudo-labels on keyframes (where OpenPCDet trains/evaluates).
+  use_sweeps: true
+  max_range: 70.0                      # HDL-32E effective range
+
+ground_removal:
+  method: patchworkpp                  # 'patchworkpp' (preferred) or 'ransac'
+  sensor_height: 1.84                  # LIDAR_TOP mounting height on nuScenes ego
+  sensor_offset: [0.9437, 0.0, 1.8402] # LIDAR_TOP position in ego vehicle frame
+  patchwork_th_dist: 0.20              # Distance threshold adapted for 32-beam
+  min_sensor_radius: 1.8               # Filter vehicle self-reflections (ego body)
+  residual_thresh: 0.08                # Post-filter residual road points near ground plane Og
+  ransac_dist_thresh: 0.15
+  ransac_iters: 200
+
+motion_score:
+  radius: 0.45                          # neighborhood radius r [m]
+  num_adjacent: 3                      # N adjacent frames on EACH side
+  max_points_kdtree: 200000
+
+clustering:
+  num_agg_frames: 5                    # n consecutive frames aggregated
+  subsample_ratio: 0.2                 # 1/n
+  motion_keep_threshold: 0.5           # keep ALL points with pp_score < this
+                                       # (low PP-score == ephemeral == moving)
+  pp_feature_weight: 2.0               # scaling of PP-score feature for HDBSCAN
+  dt_feature_weight: 2.0               # scaling of delta-t feature [m/s equivalent]
+  hdbscan:
+    min_cluster_size: 15
+    min_samples: 15
+    cluster_selection_epsilon: 0.15
+  filters:
+    min_points: 10
+    max_dist_above_ground: 1.0         # segment bottom must be <=1m above O_g
+    min_height: 0.5
+
+bbox_fitting:
+  angle_resolution_deg: 1.0            # L-shape fitting search resolution
+  criterion: closeness                 # 'closeness' | 'variance' | 'area'
+
+tracking:
+  match_radius: 1.0                    # greedy assignment radius [m]
+  relaxed_radius: 5.0                  # fallback radius for fast movers
+  relaxed_max_point_diff: 0.30         # <=30% point count difference
+  max_age: 3                           # frames a track survives unmatched
+  static_alpha: 0.20                   # >= alpha of points with pp > delta -> static box
+  static_delta: 0.70
+
+clip:
+  model_name: ViT-B/16
+  device: cuda
+  batch_size: 64
+  num_views: 4
+  view_yaws_deg: [0.0, 18.0, -18.0, 0.0]
+  view_pitches_deg: [0.0, 0.0, 0.0, 6.0]
+  image_size: 224
+  proj_grid: 112                       # coarse projection grid before upsampling
+  densify_kernel: 3                    # morphological closing kernel
+  gaussian_sigma: 2.0
+  prompt_template: "a point representation of a {}"
+  # Per-track subsampling: classify at most this many segments per track
+  # (evenly spaced), labels are then propagated by the refinement stage.
+  max_segments_per_track: 10
+  categories:
+    car:                  [car, van, minivan]
+    truck:                [truck, pickup truck, lorry]
+    bus:                  [bus, school bus, coach]
+    trailer:              [trailer, semi-trailer]
+    construction_vehicle: [construction vehicle, bulldozer, excavator]
+    pedestrian:           [pedestrian, human body, human]
+    motorcycle:           [motorcycle, motorbike]
+    bicycle:              [bicycle, bike, cyclist]
+    traffic_cone:         [traffic cone, orange cone]
+    barrier:              [barrier, fence, wall]
+    background:           [traffic light, traffic sign, pole, tree, clutter]
+
+refinement:
+  label_min_track_ratio: 0.60          # label must appear in >=60% of track
+  score_threshold_vehicle: 0.5
+  score_threshold_other: 0.3
+  vehicle_classes: [car, truck, bus, trailer, construction_vehicle]
+  median_top_m: 5                      # M boxes with most points for median box
+  inflate: 0.3                         # inflate each dimension by 0.3m
+  final_size_filter:                   # remove clearly wrong boxes
+    w: [0.2, 3.5]
+    l: [0.2, 20.0]
+    h: [0.5, 4.0]
+  # Size-prior fallback for MOVING objects whose CLIP label is unreliable
+  size_priors:
+    pedestrian: {w: [0.2, 1.0], l: [0.2, 1.0],  h: [0.8, 2.2]}
+    bicycle:    {w: [0.2, 1.0], l: [1.0, 2.5],  h: [1.4, 2.0]}
+    motorcycle: {w: [0.4, 1.2], l: [1.5, 3.0],  h: [1.0, 2.0]}
+    car:        {w: [1.5, 2.5], l: [3.0, 6.0],  h: [1.2, 2.2]}
+    truck:      {w: [2.0, 3.0], l: [5.0, 15.0], h: [2.0, 4.5]}
+
+pseudo_labels:
+  format: nuscenes                     # writer backend
+  min_score: 0.0                       # keep all surviving boxes
+
+self_training:
+  detector: centerpoint
+  openpcdet_root: /opt/OpenPCDet
+  epochs: 10
+  max_lr: 0.003
+  train_fraction: 0.5                  # 50% of the training split
+  use_gt_sampling: false               # NO pseudo-label database augmentation
+  batch_size_per_gpu: 4
+
+evaluation:
+  # nuScenes standard: NDS + mAP (distance-based matching in the official
+  # protocol; we additionally report IoU-based AP at the thresholds below
+  # for comparability with the paper's evaluation style)
+  iou_thresholds:
+    car: 0.5
+    truck: 0.5
+    bus: 0.5
+    trailer: 0.5
+    construction_vehicle: 0.5
+    pedestrian: 0.25
+    motorcycle: 0.25
+    bicycle: 0.25
+    traffic_cone: 0.25
+    barrier: 0.25

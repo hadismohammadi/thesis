@@ -1,0 +1,110 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# Type checking & Linters
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# Environments, credentials, and local secrets
+.env
+.env.*
+!.env.example
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Operating System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Project-specific: Datasets & Archives
+# Keep source code in data/ (e.g. data/*.py, data/__init__.py) but ignore dataset files/folders
+data/*
+!data/*.py
+!data/__init__.py
+nus/
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+
+# Project-specific: Pipeline Outputs, Logs & Model Checkpoints
+outputs/
+runs/
+work_dirs/
+checkpoints/
+*.pth
+*.pt
+*.onnx
+*.pkl
+
+# Test & Debug Visualizations / Generated Images
+alignment_check.png
+check_*.png
+
+# Submodule / cloned external repositories (can be git-cloned separately if needed)
+patchwork-plusplus/
+
+# Accidentally created artifact directory from bash brace expansion
+"{config,data,pipeline,self_training}"/
+

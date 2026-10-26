@@ -1,0 +1,117 @@
+# =====================================================================
+# ViLGOD configuration — KITTI
+# =====================================================================
+# IMPORTANT adaptation note:
+#   The KITTI *object* benchmark provides single, unordered frames —
+#   ViLGOD needs temporal sequences (PP-score, tracking). We therefore
+#   run discovery on KITTI RAW sequences (synced+rectified, with oxts)
+#   and map frames back to the object benchmark via the official
+#   raw<->object mapping (train_rand.txt / train_mapping.txt) when
+#   exporting labels. Set `raw_root` to the KITTI raw data and
+#   `object_root` to the object benchmark.
+
+dataset:
+  name: kitti
+  raw_root: /data/kitti_raw            # contains 2011_09_26/... drives
+  object_root: /data/kitti/object      # contains training/{velodyne,calib,label_2}
+  mapping_dir: /data/kitti/object/devkit/mapping   # train_rand.txt, train_mapping.txt
+  drives: all                          # 'all' or list like ["2011_09_26_drive_0001_sync"]
+  max_range: 120.0                     # HDL-64E
+
+ground_removal:
+  method: patchworkpp
+  sensor_height: 1.73                  # HDL-64E mounting height on KITTI car
+  ransac_dist_thresh: 0.15
+  ransac_iters: 200
+
+motion_score:
+  radius: 0.6
+  num_adjacent: 3
+  max_points_kdtree: 200000
+
+clustering:
+  num_agg_frames: 5
+  subsample_ratio: 0.2
+  motion_keep_threshold: 0.5
+  pp_feature_weight: 2.0
+  dt_feature_weight: 2.0
+  hdbscan:
+    min_cluster_size: 15
+    min_samples: 15
+    cluster_selection_epsilon: 0.15
+  filters:
+    min_points: 10
+    max_dist_above_ground: 1.0
+    min_height: 0.5
+
+bbox_fitting:
+  angle_resolution_deg: 1.0
+  criterion: closeness
+
+tracking:
+  match_radius: 1.0
+  relaxed_radius: 5.0
+  relaxed_max_point_diff: 0.30
+  max_age: 3
+  static_alpha: 0.20
+  static_delta: 0.70
+
+clip:
+  model_name: ViT-B/16
+  device: cuda
+  batch_size: 64
+  num_views: 4
+  view_yaws_deg: [0.0, 18.0, -18.0, 0.0]
+  view_pitches_deg: [0.0, 0.0, 0.0, 6.0]
+  image_size: 224
+  proj_grid: 112
+  densify_kernel: 3
+  gaussian_sigma: 2.0
+  prompt_template: "a point representation of a {}"
+  max_segments_per_track: 10
+  categories:
+    Car:        [car, van, minivan, sedan]
+    Pedestrian: [pedestrian, human body, human]
+    Cyclist:    [cyclist, rider, bicycle, bike]
+    Truck:      [truck, lorry]
+    background: [traffic light, traffic sign, fence, pole, tree, house, wall, clutter]
+
+refinement:
+  label_min_track_ratio: 0.60
+  score_threshold_vehicle: 0.5
+  score_threshold_other: 0.3
+  vehicle_classes: [Car, Truck]
+  median_top_m: 5
+  inflate: 0.3
+  final_size_filter:
+    w: [0.2, 3.5]
+    l: [0.2, 20.0]
+    h: [0.5, 4.0]
+  size_priors:
+    Pedestrian: {w: [0.2, 1.0], l: [0.2, 1.0],  h: [0.8, 2.2]}
+    Cyclist:    {w: [0.2, 1.0], l: [1.0, 2.5],  h: [1.4, 2.0]}
+    Car:        {w: [1.5, 2.3], l: [3.0, 6.0],  h: [1.2, 2.2]}
+    Truck:      {w: [2.0, 3.0], l: [4.0, 12.0], h: [2.0, 4.5]}
+
+pseudo_labels:
+  format: kitti
+  min_score: 0.0
+
+self_training:
+  detector: centerpoint
+  openpcdet_root: /opt/OpenPCDet
+  epochs: 10
+  max_lr: 0.003
+  train_fraction: 0.5
+  use_gt_sampling: false
+  batch_size_per_gpu: 4
+
+evaluation:
+  # KITTI official: AP at IoU 0.7 (Car), 0.5 (Pedestrian/Cyclist),
+  # Easy / Moderate / Hard difficulty. Handled by OpenPCDet's
+  # kitti_object_eval_python in evaluate.py.
+  iou_thresholds:
+    Car: 0.7
+    Pedestrian: 0.5
+    Cyclist: 0.5
+    Truck: 0.7

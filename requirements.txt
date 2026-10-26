@@ -1,0 +1,26 @@
+# ---- core ----
+numpy>=1.24
+scipy>=1.10
+pyyaml>=6.0
+opencv-python>=4.8          # depth-map densification/smoothing
+shapely>=2.0                # rotated BEV IoU in evaluate.py
+
+# ---- deep learning ----
+torch>=2.0                  # install the wheel matching your CUDA version
+torchvision>=0.15
+ftfy                        # CLIP tokenizer deps
+regex
+git+https://github.com/openai/CLIP.git   # OpenAI CLIP (ViT-B/16)
+
+# ---- clustering / geometry ----
+hdbscan>=0.8.33
+open3d>=0.17                # optional visualization / geometry utilities
+
+# ---- datasets ----
+nuscenes-devkit>=1.1.10
+pyquaternion>=0.9.9
+
+# ---- NOT pip-installable (build from source, see README) ----
+# Patchwork++  -> https://github.com/url-kaist/patchwork-plusplus  (make pyinstall)
+# OpenPCDet    -> https://github.com/open-mmlab/OpenPCDet          (python setup.py develop)
+# spconv       -> pip install spconv-cu120  (match your CUDA, needed by OpenPCDet)
